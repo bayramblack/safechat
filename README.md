@@ -1,4 +1,4 @@
-# UnderNet Safe Chat
+# UnderNet Safe Chat https://safechat.online/
 
 > Open source — MIT licensed.
 
@@ -83,3 +83,5 @@ This is an open source project under the MIT license. Pull requests, issues, and
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+https://safechat.online/
