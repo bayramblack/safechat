@@ -1,0 +1,1028 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: UnderNet Safe Chat API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication and identity
+  - name: conversations
+    description: Conversation management
+  - name: messages
+    description: Message operations
+  - name: upload
+    description: File upload and download
+  - name: sync
+    description: Fallback polling endpoints
+  - name: notifications
+    description: Push notification management
+  - name: storage
+    description: Object storage operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/create:
+    post:
+      operationId: authCreate
+      tags: [auth]
+      summary: Create new wallet identity
+      description: Generate a new 24-word seed phrase, wallet address, and session
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthCreateBody"
+      responses:
+        "201":
+          description: Identity created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthCreateResponse"
+
+  /auth/import:
+    post:
+      operationId: authImport
+      tags: [auth]
+      summary: Import existing seed phrase
+      description: Import an existing seed phrase and create/restore a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthImportBody"
+      responses:
+        "200":
+          description: Identity imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthImportResponse"
+        "400":
+          description: Invalid seed phrase
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/restore:
+    post:
+      operationId: authRestore
+      tags: [auth]
+      summary: Restore session from token
+      description: Restore an existing session using the session cookie
+      responses:
+        "200":
+          description: Session restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthRestoreResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags: [auth]
+      summary: Logout
+      description: Revoke the current session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: authMe
+      tags: [auth]
+      summary: Get current user
+      description: Get the currently authenticated user's profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List conversations
+      description: List all conversations for the authenticated user
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationWithPreview"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Create or open conversation
+      description: Create a new conversation or open an existing one by wallet address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationBody"
+      responses:
+        "200":
+          description: Existing conversation opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDetail"
+        "201":
+          description: New conversation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDetail"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get conversation details
+      description: Get details for a specific conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDetail"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations/{id}/messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: List messages
+      description: Get paginated messages for a conversation (newest first)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: cursor
+          in: query
+          schema:
+            type: integer
+          description: Cursor for pagination (message ID to start before)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of messages to return (max 100)
+      responses:
+        "200":
+          description: Message list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send message
+      description: Send a text, image, or file message
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /messages/{id}/delivered:
+    patch:
+      operationId: markMessageDelivered
+      tags: [messages]
+      summary: Mark message as delivered
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Message marked as delivered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageStatusResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /messages/{id}/read:
+    patch:
+      operationId: markMessageRead
+      tags: [messages]
+      summary: Mark message as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Message marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageStatusResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /upload:
+    post:
+      operationId: uploadFile
+      tags: [upload]
+      summary: Upload a file
+      description: Upload an image or document file (multipart/form-data, field name "file")
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload (max 25MB)
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttachmentResponse"
+        "400":
+          description: Invalid file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /download/{id}:
+    get:
+      operationId: downloadFile
+      tags: [upload]
+      summary: Download a file
+      description: Download an uploaded file by attachment ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sync/messages:
+    get:
+      operationId: syncMessages
+      tags: [sync]
+      summary: Sync missed messages
+      description: Fetch messages since a given timestamp
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+          description: Timestamp in milliseconds
+      responses:
+        "200":
+          description: Synced messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncMessagesResponse"
+
+  /sync/conversations:
+    get:
+      operationId: syncConversations
+      tags: [sync]
+      summary: Sync conversation updates
+      description: Fetch conversation updates since a given timestamp
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+          description: Timestamp in milliseconds
+      responses:
+        "200":
+          description: Synced conversations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncConversationsResponse"
+
+  /sync/status:
+    get:
+      operationId: syncStatus
+      tags: [sync]
+      summary: Sync read/delivery status
+      description: Fetch status updates since a given timestamp
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+          description: Timestamp in milliseconds
+      responses:
+        "200":
+          description: Status updates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatusResponse"
+
+  /notifications/subscribe:
+    post:
+      operationId: notificationSubscribe
+      tags: [notifications]
+      summary: Register push subscription
+      description: Register a web push notification subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationSubscribeBody"
+      responses:
+        "201":
+          description: Subscription registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSubscribeResponse"
+        "200":
+          description: Subscription already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSubscribeResponse"
+
+  /notifications/unsubscribe:
+    delete:
+      operationId: notificationUnsubscribe
+      tags: [notifications]
+      summary: Unsubscribe from push notifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationUnsubscribeBody"
+      responses:
+        "200":
+          description: Unsubscribed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessStatusResponse"
+
+  /notifications/status:
+    get:
+      operationId: notificationStatus
+      tags: [notifications]
+      summary: Get notification status
+      description: Check if push notifications are active
+      responses:
+        "200":
+          description: Notification status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationStatusResponse"
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned URL generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    SuccessStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    AuthCreateBody:
+      type: object
+      properties:
+        deviceInfo:
+          type: string
+
+    AuthCreateResponse:
+      type: object
+      properties:
+        seedPhrase:
+          type: string
+        walletAddress:
+          type: string
+        userId:
+          type: integer
+      required:
+        - seedPhrase
+        - walletAddress
+        - userId
+
+    AuthImportBody:
+      type: object
+      properties:
+        seedPhrase:
+          type: string
+        deviceInfo:
+          type: string
+      required:
+        - seedPhrase
+
+    AuthImportResponse:
+      type: object
+      properties:
+        walletAddress:
+          type: string
+        userId:
+          type: integer
+      required:
+        - walletAddress
+        - userId
+
+    AuthRestoreResponse:
+      type: object
+      properties:
+        walletAddress:
+          type: string
+        userId:
+          type: integer
+        displayName:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+      required:
+        - walletAddress
+        - userId
+
+    UserProfile:
+      type: object
+      properties:
+        userId:
+          type: integer
+        walletAddress:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        lastSeenAt:
+          type: ["string", "null"]
+          format: date-time
+        isActive:
+          type: boolean
+      required:
+        - userId
+        - walletAddress
+        - isActive
+
+    OtherUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        walletAddress:
+          type: string
+        displayName:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        lastSeenAt:
+          type: ["string", "null"]
+          format: date-time
+        isActive:
+          type: boolean
+      required:
+        - id
+        - walletAddress
+        - isActive
+
+    LastMessagePreview:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        textContent:
+          type: ["string", "null"]
+        senderId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+      required:
+        - id
+        - type
+        - senderId
+        - createdAt
+        - status
+
+    ConversationWithPreview:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        otherUser:
+          $ref: "#/components/schemas/OtherUser"
+        lastMessage:
+          oneOf:
+            - $ref: "#/components/schemas/LastMessagePreview"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - createdAt
+        - updatedAt
+
+    CreateConversationBody:
+      type: object
+      properties:
+        walletAddress:
+          type: string
+      required:
+        - walletAddress
+
+    ConversationDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        otherUser:
+          $ref: "#/components/schemas/OtherUser"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        isNew:
+          type: boolean
+      required:
+        - id
+        - type
+        - createdAt
+        - updatedAt
+
+    AttachmentInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        storageKey:
+          type: string
+      required:
+        - id
+        - originalName
+        - mimeType
+        - fileSize
+        - storageKey
+
+    MessageResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientMessageId:
+          type: string
+        conversationId:
+          type: integer
+        senderId:
+          type: integer
+        type:
+          type: string
+        textContent:
+          type: ["string", "null"]
+        attachmentId:
+          type: ["integer", "null"]
+        attachment:
+          oneOf:
+            - $ref: "#/components/schemas/AttachmentInfo"
+            - type: "null"
+        status:
+          type: string
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        readAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - clientMessageId
+        - conversationId
+        - senderId
+        - type
+        - status
+        - createdAt
+
+    MessageListResponse:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageResponse"
+        nextCursor:
+          type: ["integer", "null"]
+        hasMore:
+          type: boolean
+      required:
+        - messages
+        - hasMore
+
+    SendMessageBody:
+      type: object
+      properties:
+        clientMessageId:
+          type: string
+        type:
+          type: string
+          enum: [text, image, file]
+          default: text
+        textContent:
+          type: string
+        attachmentId:
+          type: integer
+      required:
+        - clientMessageId
+
+    MessageStatusResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        readAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - status
+
+    AttachmentResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        storageKey:
+          type: string
+      required:
+        - id
+        - originalName
+        - mimeType
+        - fileSize
+        - storageKey
+
+    SyncMessagesResponse:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageResponse"
+      required:
+        - messages
+
+    SyncConversationItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        participantA:
+          type: integer
+        participantB:
+          type: integer
+        lastMessageId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - participantA
+        - participantB
+        - createdAt
+        - updatedAt
+
+    SyncConversationsResponse:
+      type: object
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncConversationItem"
+      required:
+        - conversations
+
+    SyncStatusUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        status:
+          type: string
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        readAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - status
+
+    SyncStatusResponse:
+      type: object
+      properties:
+        statusUpdates:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncStatusUpdate"
+      required:
+        - statusUpdates
+
+    NotificationSubscribeBody:
+      type: object
+      properties:
+        subscription:
+          type: object
+      required:
+        - subscription
+
+    NotificationSubscribeResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+      required:
+        - id
+        - status
+
+    NotificationUnsubscribeBody:
+      type: object
+      properties:
+        subscription:
+          type: object
+
+    NotificationStatusResponse:
+      type: object
+      properties:
+        hasActiveSubscription:
+          type: boolean
+        subscriptionCount:
+          type: integer
+        vapidPublicKey:
+          type: ["string", "null"]
+      required:
+        - hasActiveSubscription
+        - subscriptionCount
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required:
+        - uploadURL
+        - objectPath
